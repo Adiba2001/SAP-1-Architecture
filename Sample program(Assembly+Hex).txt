@@ -1,0 +1,21 @@
+// Sample program
+ORG 0
+START:  LDA 12
+        LDB 13
+        and_logic 10
+        or_logic 11
+        JMP 6
+        STA 8
+        neg_a
+        neg_b
+        not_a 14
+End:    not_b 15
+
+ORG 12
+        DEC 51
+        DEC 25
+
+; Comments start with ; or //
+
+Generated HEX code:
+1C 2D 5A 6B B6 48 70 80 9E AF 00 00 33 19 00 00
