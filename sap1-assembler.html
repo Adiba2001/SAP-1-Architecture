@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SAP-1 / Custom RAM Assembler (Mapped Opcodes)</title>
+<style>
+  :root{
+    --bg:#0b1220; --card:#0f1720; --accent:#6b46c1; --muted:#98a0b3; --text:#e6eef8;
+  }
+  body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,#071126 0%, #081827 100%); color:var(--text);}
+  .wrap{max-width:980px;margin:36px auto;padding:28px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:12px; box-shadow: 0 8px 30px rgba(2,6,23,0.6);}
+  h1{margin:0 0 6px;font-size:26px}
+  p.lead{margin:0 0 18px;color:var(--muted)}
+  .grid{display:grid;grid-template-columns:1fr 420px;gap:18px}
+  textarea.asm{width:100%;height:360px;resize:vertical;border-radius:8px;padding:14px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;background:#061520;color:#dff1ff;border:1px solid rgba(255,255,255,0.03);box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);}
+  .controls{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+  button{background:var(--accent);color:white;border:0;padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:600}
+  button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--text)}
+  .panel{background:#07121a;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.02)}
+  .small{font-size:13px;color:var(--muted)}
+  label{display:block;font-weight:600;margin-bottom:6px}
+  .hex-out{width:100%;height:100px;padding:12px;border-radius:8px;background:#020912;color:#bfe9ff;font-family:ui-monospace,monospace;overflow:auto;border:1px solid rgba(255,255,255,0.02)}
+  .row{display:flex;gap:8px;align-items:center}
+  .opmap{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  input.small{padding:8px;border-radius:6px;background:#08151b;border:1px solid rgba(255,255,255,0.02);color:var(--text)}
+  .note{font-size:13px;color:var(--muted);margin-top:8px}
+  footer{margin-top:16px;color:var(--muted);font-size:13px}
+  .badge{display:inline-block;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,0.03);font-weight:600;color:var(--muted);font-size:12px}
+  .op-label{font-size:12px;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SAP-1 / Custom RAM Assembler </h1>
+  <p class="lead">Assembly on the left → assemble → RAM hex on the right.</p>
+
+  <div class="grid">
+    <div>
+      <label for="asm">Assembly Code(Sample Program)</label>
+      <textarea id="asm" class="asm" spellcheck="false">// Example program
+ORG 0
+START:  LDA 12
+        LDB 13
+        and_logic 10
+        or_logic 11
+        JMP 6
+        STA 8
+        neg_a
+        neg_b
+        not_a 14
+End:    not_b 15
+
+ORG 12
+        DEC 51
+        DEC 25
+
+; Comments start with ; or //
+      </textarea>
+
+      <div class="controls">
+        <button id="assemble">Assemble to Hex</button>
+        <button id="copy" class="ghost">Copy to Clipboard</button>
+        <button id="download" class="ghost">Download ram.hex</button>
+        <button id="download-html" class="ghost">Download this HTML</button>
+        <button id="clear" class="ghost">Clear Output</button>
+      </div>
+      <div class="note">Supported: <span class="badge">LDA,LDB,and_logic,or_logic,neg_a,neg_b,not_a,not_b,STA,OUT,JMP,SUB,HLT</span>. Operands limited to low nibble (0–15) unless you switch to 2-byte mode.</div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <label>Opcode Map </label>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px">
+          <div>
+            <div class="op-label">LDA</div><input class="small" data-op="LDA" value="0x1">
+          </div>
+          <div>
+            <div class="op-label">LDB</div><input class="small" data-op="LDB" value="0x2">
+          </div>
+          <div>
+            <div class="op-label">and_logic</div><input class="small" data-op="AND_LOGIC" value="0x5">
+          </div>
+          <div>
+            <div class="op-label">or_logic</div><input class="small" data-op="OR_LOGIC" value="0x6">
+          </div>
+          <div>
+            <div class="op-label">neg_a</div><input class="small" data-op="NEG_A" value="0x7">
+          </div>
+          <div>
+            <div class="op-label">neg_b</div><input class="small" data-op="NEG_B" value="0x8">
+          </div>
+          <div>
+            <div class="op-label">not_a</div><input class="small" data-op="NOT_A" value="0x9">
+          </div>
+          <div>
+            <div class="op-label">not_b</div><input class="small" data-op="NOT_B" value="0xA">
+          </div>
+          <div>
+            <div class="op-label">STA</div><input class="small" data-op="STA" value="0x4">
+          </div>
+          <div>
+            <div class="op-label">OUT</div><input class="small" data-op="OUT" value="0x3">
+          </div>
+          <div>
+            <div class="op-label">JMP</div><input class="small" data-op="JMP" value="0xB">
+          </div>
+          <div>
+            <div class="op-label">SUB</div><input class="small" data-op="SUB" value="0xC">
+          </div>
+          <div>
+            <div class="op-label">HLT</div><input class="small" data-op="HLT" value="0xF">
+          </div>
+        </div>
+        <div style="margin-top:8px" class="small">Opcodes mapped as per desgined.</div>
+      </div>
+
+      <div style="height:12px"></div>
+
+      <div class="panel">
+        <label>Generated RAM Hex</label>
+        <div id="hexText" class="hex-out" contenteditable="false"></div>
+        <div style="margin-top:8px;display:flex;gap:6px">
+          <button id="showBytes" class="ghost">Show bytes (per-line)</button>
+          <button id="download-logisim" class="ghost">Download one-byte-per-line (.hex)</button>
+        </div>
+      <!--  <div class="note">Default memory size: 16 bytes (0x0–0xF). Change DEFAULT_RAM_SIZE in the script if you need larger memory.</div>-->
+      </div>
+    </div>
+  </div>
+
+<!--  <footer>
+    Tip: Use <code>ORG n</code> to set the current address, <code>DEC v</code> to emit a raw data byte (0–255), and labels like <code>LOOP:</code>.
+  </footer>
+</div>-->
+
+<script>
+/* RAM Assembler — mapped defaults
+   - Two-pass assembler with labels
+   - Configurable opcode map (editable inputs)
+   - Produces 8-bit bytes: (opcode<<4) | operand
+   - RAM size default: 16 bytes (addresses 0..15)
+*/
+(function(){
+  const asmEl = document.getElementById('asm');
+  const assembleBtn = document.getElementById('assemble');
+  const hexText = document.getElementById('hexText');
+  const copyBtn = document.getElementById('copy');
+  const downloadBtn = document.getElementById('download');
+  const opInputs = document.querySelectorAll('[data-op]');
+  const downloadHtmlBtn = document.getElementById('download-html');
+  const showBytesBtn = document.getElementById('showBytes');
+  const downloadLogisim = document.getElementById('download-logisim');
+  const clearBtn = document.getElementById('clear');
+
+  const DEFAULT_RAM_SIZE = 16; // change here if you need larger memory (e.g., 256)
+
+  function readOpcodeMap(){
+    const map = {};
+    opInputs.forEach(inp=>{
+      const rawKey = String(inp.dataset.op || '').trim();
+      const key = rawKey.toUpperCase();
+      let v = String(inp.value).trim();
+      try{
+        if(v.startsWith('0x')||v.startsWith('0X')) v = parseInt(v,16);
+        else if(v.startsWith('0b')||v.startsWith('0B')) v = parseInt(v,2);
+        else v = Number(v);
+      }catch(e){ v = 0; }
+      const val = Number(v) & 0xF;
+      // store multiple lookup forms: exact uppercase and underscore-free form
+      map[key] = val;
+      map[key.replace(/_/g,'')] = val;
+    });
+    return map;
+  }
+
+  function parseNumber(tok){
+    if(!tok) return null;
+    tok = String(tok).trim();
+    if(/^0x[0-9a-fA-F]+$/.test(tok)) return parseInt(tok,16);
+    if(/^0b[01]+$/.test(tok)) return parseInt(tok.slice(2),2);
+    if(/^[0-9]+$/.test(tok)) return parseInt(tok,10);
+    return null;
+  }
+
+  function tokenizeLine(line){
+    // remove comments ; or //
+    let c1 = line.indexOf(';'); let c2 = line.indexOf('//');
+    let cut = -1;
+    if(c1>=0) cut = (cut===-1?c1:Math.min(cut,c1));
+    if(c2>=0) cut = (cut===-1?c2:Math.min(cut,c2));
+    if(cut>=0) line = line.slice(0,cut);
+    return line.trim();
+  }
+
+  function assembleText(asmText, ramSize=DEFAULT_RAM_SIZE){
+    const lines = asmText.split(/\r?\n/);
+    const opmap = readOpcodeMap();
+    const hasOp = (name)=> Object.prototype.hasOwnProperty.call(opmap, name.toUpperCase()) || Object.prototype.hasOwnProperty.call(opmap, (name.toUpperCase()).replace(/_/g,''));
+
+    // first pass: collect labels and addresses
+    let addr = 0;
+    const labels = {};
+    const pass1 = []; // {type, line, addr, ...}
+    for(let i=0;i<lines.length;i++){
+      const raw = lines[i];
+      const t = tokenizeLine(raw);
+      if(!t) { pass1.push({type:'empty'}); continue; }
+      // Label?
+      let rem = t;
+      if(/^[A-Za-z_]\w*:\s*/.test(rem)){
+        const m = rem.match(/^([A-Za-z_]\w*):\s*(.*)$/);
+        if(m){
+          const lab = m[1].toUpperCase();
+          if(labels[lab] !== undefined) {
+            pass1.push({type:'error',line:i+1, msg:'Duplicate label '+lab});
+            continue;
+          }
+          labels[lab] = addr;
+          rem = m[2].trim();
+          if(!rem){ pass1.push({type:'noline'}); continue; }
+        }
+      }
+      const parts = rem.split(/\s+/);
+      const op = parts[0].toUpperCase();
+      if(op === 'ORG'){
+        const num = parts[1]? parseNumber(parts[1]) : null;
+        if(num===null) { pass1.push({type:'error',line:i+1,msg:'ORG expects a number'}); continue;}
+        addr = num & 0xFF;
+        pass1.push({type:'org',line:i+1, addr});
+        continue;
+      }
+      if(op === 'DEC'){
+        const num = parts[1]? parseNumber(parts[1]) : null;
+        if(num===null) { pass1.push({type:'error',line:i+1,msg:'DEC expects a number'}); continue;}
+        pass1.push({type:'data',line:i+1, addr, value: num & 0xFF});
+        addr = (addr+1) & 0xFFFFFFFF;
+        continue;
+      }
+      // instruction
+      if(hasOp(op) || ['ADD','SUB','HLT','OUT'].includes(op)){
+        pass1.push({type:'instr',line:i+1, addr, op, rawParts:parts.slice(1)});
+        addr = (addr+1) & 0xFFFFFFFF;
+        continue;
+      }
+      pass1.push({type:'raw',line:i+1, text:rem});
+    }
+
+    // second pass: generate bytes into ram array
+    const ram = new Array(ramSize).fill(0);
+    const errors = [];
+    for(const entry of pass1){
+      if(entry.type === 'instr'){
+        const op = entry.op.toUpperCase();
+        const operandToken = entry.rawParts && entry.rawParts.length ? entry.rawParts[0] : null;
+        let operand = 0;
+        if(operandToken){
+          const num = parseNumber(operandToken);
+          if(num !== null) operand = num & 0xFF;
+          else {
+            const lab = operandToken.toUpperCase();
+            if(labels[lab] === undefined) {
+              errors.push('Line '+entry.line+': Unknown label "'+operandToken+'"');
+              operand = 0;
+            } else operand = labels[lab] & 0xFF;
+          }
+        }
+        const opmap = readOpcodeMap();
+        // lookup using multiple forms
+        let opcode = null;
+        const k1 = op;
+        const k2 = op.replace(/_/g,'');
+        if(opmap[k1] !== undefined) opcode = opmap[k1];
+        else if(opmap[k2] !== undefined) opcode = opmap[k2];
+        else {
+          errors.push('Line '+entry.line+': Unknown opcode "'+op+'"');
+          opcode = 0;
+        }
+        // final byte: opcode nibble high, operand low 4 bits
+        const byte = ((opcode & 0xF) << 4) | (operand & 0xF);
+        const address = entry.addr;
+        if(address < 0 || address >= ramSize){
+          errors.push('Line '+entry.line+': address out of RAM range ('+address+')');
+        } else {
+          ram[address] = byte & 0xFF;
+        }
+      } else if(entry.type === 'data'){
+        const address = entry.addr;
+        if(address < 0 || address >= ramSize){
+          errors.push('Line '+entry.line+': data address out of RAM range ('+address+')');
+        } else {
+          ram[address] = entry.value & 0xFF;
+        }
+      } else if(entry.type === 'org'){
+        // no-op in second pass
+      } else if(entry.type === 'error'){
+        errors.push('Line '+entry.line+': '+entry.msg);
+      }
+    }
+
+    return {ram, errors, labels};
+  }
+
+  function formatHexString(ram){
+    return ram.map(b=>('0'+b.toString(16).toUpperCase()).slice(-2)).join(' ');
+  }
+
+  assembleBtn.addEventListener('click', ()=>{
+    const asm = asmEl.value;
+    const {ram, errors, labels} = assembleText(asm, DEFAULT_RAM_SIZE);
+    if(errors && errors.length){
+      hexText.textContent = 'Errors during assembly:\n' + errors.join('\n');
+      return;
+    }
+    const out = formatHexString(ram);
+    // pretty print address: hex
+    let pretty = '';
+    for(let i=0;i<ram.length;i++){
+      pretty += i.toString(16).toUpperCase().padStart(2,'0') + ': ' + ('0'+ram[i].toString(16).toUpperCase()).slice(-2) + '\n';
+    }
+    pretty += '\nHex (space-separated, ready to paste into your RAM/loader):\n' + out;
+    hexText.textContent = pretty;
+    hexText.dataset.hex = out;
+    hexText.dataset.bytes = JSON.stringify(ram);
+  });
+
+  copyBtn.addEventListener('click', async ()=>{
+    const hex = hexText.dataset.hex;
+    if(!hex){ alert('Nothing assembled yet — click Assemble first.'); return; }
+    try{
+      await navigator.clipboard.writeText(hex);
+      copyBtn.textContent = 'Copied ✓';
+      setTimeout(()=>copyBtn.textContent='Copy to Clipboard',1200);
+    }catch(e){ alert('Copy failed: '+e); }
+  });
+
+  downloadBtn.addEventListener('click', ()=>{
+    const hex = hexText.dataset.hex;
+    if(!hex){ alert('Assemble first'); return; }
+    const blob = new Blob([hex], {type:'text/plain;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'ram.hex';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  downloadLogisim.addEventListener('click', ()=>{
+    const bytesRaw = hexText.dataset.bytes;
+    if(!bytesRaw){ alert('Assemble first'); return; }
+    const ram = JSON.parse(bytesRaw);
+    const lines = ram.map(b => ('0'+b.toString(16).toUpperCase()).slice(-2));
+    const blob = new Blob([lines.join('\n')], {type:'text/plain;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'ram_bytes_per_line.hex';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  showBytesBtn.addEventListener('click', ()=>{
+    const bytesRaw = hexText.dataset.bytes;
+    if(!bytesRaw){ alert('Assemble first'); return; }
+    const ram = JSON.parse(bytesRaw);
+    const lines = ram.map((b,i)=> i.toString(16).toUpperCase().padStart(2,'0') + ': ' + ('0'+b.toString(16).toUpperCase()).slice(-2));
+    hexText.textContent = lines.join('\n');
+  });
+
+  clearBtn.addEventListener('click', ()=>{
+    hexText.textContent = '';
+    delete hexText.dataset.hex;
+    delete hexText.dataset.bytes;
+  });
+
+  downloadHtmlBtn.addEventListener('click', ()=>{
+    let doc = document.documentElement.outerHTML;
+    doc = '<!doctype html>\n' + doc;
+    const blob = new Blob([doc], {type:'text/html;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sap1-assembler-ram-mapped.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // Ctrl+Enter to assemble
+  asmEl.addEventListener('keydown', (e)=>{
+    if((e.ctrlKey||e.metaKey) && e.key === 'Enter'){ assembleBtn.click(); e.preventDefault(); }
+  });
+
+})();
+</script>
+</body>
+</html>
